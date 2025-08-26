@@ -1,11 +1,221 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Document</title>
-</head>
-<body>
-  
-</body>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>DOM 비동기 처리 통합 실습</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 20px;
+        line-height: 1.6;
+      }
+      .container {
+        max-width: 800px;
+        margin: auto;
+      }
+      .control-group {
+        margin-bottom: 25px;
+        padding: 15px;
+        border: 1px solid lightgray;
+        border-radius: 5px;
+      }
+      h1,
+      h2,
+      h3 {
+        border-bottom: 1px solid lightgray;
+        padding-bottom: 10px;
+      }
+      button {
+        margin: 5px;
+        padding: 8px 12px;
+        cursor: pointer;
+        border-radius: 4px;
+        border: 1px solid gray;
+      }
+      #log {
+        border: 1px solid black;
+        background-color: ghostwhite;
+        min-height: 200px;
+        padding: 10px;
+        overflow-y: auto;
+      }
+      #log p {
+        margin: 0 0 5px 0;
+        padding-bottom: 5px;
+        border-bottom: 1px solid lightgray;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>비동기 처리 통합 실습</h1>
+
+      <div class="control-group">
+        <h2>기본 비동기 패턴 (순차 처리)</h2>
+        <button id="callback-btn">1. 콜백 지옥 체험</button>
+        <button id="promise-btn">2. Promise로 개선</button>
+        <button id="async-await-btn">3. Async/Await 최종형태</button>
+      </div>
+
+      <div class="control-group">
+        <h2>Promise 병렬 처리</h2>
+        <button id="all-btn">Promise.all (모두 성공해야)</button>
+        <button id="race-btn">Promise.race (가장 빠른 것)</button>
+      </div>
+
+      <div class="control-group">
+        <h2>경쟁 상태 (Race Condition)</h2>
+        <p>아래 버튼들을 빠르게 여러 번 클릭하여 로그를 비교해보세요.</p>
+        <button id="race-problem-btn">문제 상황 재현</button>
+        <button id="race-solve-btn">해결 코드 적용</button>
+      </div>
+
+      <h3>실행 결과 로그</h3>
+      <div id="log"></div>
+      <button id="clear-log-btn" style="margin-top: 10px">로그 지우기</button>
+    </div>
+
+    <script>
+      // --- 1. 기본 요소 및 헬퍼(Helper) 함수 준비 ---
+      const logDiv = document.getElementById("log");
+
+      // 로그를 화면에 예쁘게 출력하는 함수
+      const log = (message) => {
+        const now = new Date();
+        const timestamp = `${now.getHours()}:${now.getMinutes()}:${String(
+          now.getSeconds()
+        ).padStart(2, "0")}.${String(now.getMilliseconds()).padStart(3, "0")}`;
+        logDiv.innerHTML += `<p><strong>${timestamp}</strong> - ${message}</p>`;
+        logDiv.scrollTop = logDiv.scrollHeight; // 항상 마지막 로그가 보이도록 스크롤
+      };
+
+      // Promise를 반환하는 비동기 작업 시뮬레이션 함수
+      const asyncTask = (taskName, ms) => {
+        return new Promise((resolve) => {
+          log(`⏳ ${taskName} 시작... (${ms / 1000}초)`);
+          setTimeout(() => {
+            log(`✅ ${taskName} 완료`);
+            resolve(taskName); // 작업 이름을 결과로 반환
+          }, ms);
+        });
+      };
+
+      // --- 2. 각 버튼에 이벤트 리스너(EventListener) 할당 ---
+
+      // [콜백 지옥] 버튼
+      document.getElementById("callback-btn").addEventListener("click", () => {
+        log("콜백 지옥 시작...");
+        setTimeout(() => {
+          log("1. 사용자 조회");
+          setTimeout(() => {
+            log("2. 게시물 조회");
+            setTimeout(() => {
+              log("3. 댓글 조회");
+              log("...콜백 지옥 종료");
+            }, 1000);
+          }, 1000);
+        }, 1000);
+      });
+
+      // [Promise] 버튼
+      document.getElementById("promise-btn").addEventListener("click", () => {
+        log("Promise 체인 시작...");
+        asyncTask("1. 사용자 조회", 1000)
+          .then(() => asyncTask("2. 게시물 조회", 1000))
+          .then(() => asyncTask("3. 댓글 조회", 1000))
+          .then(() => log("...Promise 체인 종료"));
+      });
+
+      // [Async/Await] 버튼
+      document
+        .getElementById("async-await-btn")
+        .addEventListener("click", async () => {
+          log("Async/Await 시작...");
+          await asyncTask("1. 사용자 조회", 1000);
+          await asyncTask("2. 게시물 조회", 1000);
+          await asyncTask("3. 댓글 조회", 1000);
+          log("...Async/Await 종료");
+        });
+
+      // [Promise.all] 버튼
+      document.getElementById("all-btn").addEventListener("click", async () => {
+        log("Promise.all 시작 (3개 작업 동시 실행)");
+        const tasks = [
+          asyncTask("설정 정보 로드", 1500),
+          asyncTask("사용자 데이터 로드", 2000), // 가장 오래 걸림
+          asyncTask("제품 목록 로드", 1000),
+        ];
+        // 3개의 Promise가 모두 resolve될 때까지 기다립니다.
+        const results = await Promise.all(tasks);
+        log(
+          `🎉 <strong>Promise.all 완료!</strong> 모든 결과: [${results.join(
+            ", "
+          )}] (총 ${2000 / 1000}초 소요)`
+        );
+      });
+
+      // [Promise.race] 버튼
+      document
+        .getElementById("race-btn")
+        .addEventListener("click", async () => {
+          log("Promise.race 시작 (가장 빠른 서버 찾기)");
+          const servers = [
+            asyncTask("서버 A", 1200),
+            asyncTask("서버 B", 800), // 가장 빠름
+            asyncTask("서버 C", 2000),
+          ];
+          // 3개의 Promise 중 가장 먼저 resolve되는 것의 결과를 받습니다.
+          const winner = await Promise.race(servers);
+          log(
+            `🏆 <strong>Promise.race 완료!</strong> 가장 빠른 서버: ${winner}`
+          );
+        });
+
+      // --- 경쟁 상태(Race Condition) 실습 ---
+      let latestRequestNum = 0; // 최신 요청 번호를 추적하는 변수
+
+      // [문제 상황] 버튼
+      document
+        .getElementById("race-problem-btn")
+        .addEventListener("click", () => {
+          const currentRequestNum = ++latestRequestNum;
+          log(`(문제) <strong>요청 ${currentRequestNum}</strong> 시작`);
+
+          // 1.5초가 걸리는 비동기 작업이라고 가정
+          setTimeout(() => {
+            // 이 응답이 최신 요청에 대한 것인지 확인하는 로직이 없음
+            log(
+              `<span style="color:red;">(문제) <strong>응답 ${currentRequestNum}</strong> 도착! 이 데이터로 화면을 업데이트합니다.</span>`
+            );
+          }, 1500);
+        });
+
+      // [해결 코드] 버튼
+      document
+        .getElementById("race-solve-btn")
+        .addEventListener("click", () => {
+          const currentRequestNum = ++latestRequestNum;
+          log(`(해결) <strong>요청 ${currentRequestNum}</strong> 시작`);
+
+          setTimeout(() => {
+            // 응답이 도착한 시점, 현재 요청 번호가 전체 최신 요청 번호와 같은지 확인
+            if (currentRequestNum === latestRequestNum) {
+              log(
+                `<span style="color:green;">(해결) <strong>응답 ${currentRequestNum}</strong> 도착! 최신 요청이므로 화면 업데이트!</span>`
+              );
+            } else {
+              log(
+                `<span style="color:gray;">(해결) <strong>응답 ${currentRequestNum}</strong> 도착! (하지만 최신 요청(${latestRequestNum})이 아니므로 무시)</span>`
+              );
+            }
+          }, 1500);
+        });
+
+      // [로그 지우기] 버튼
+      document.getElementById("clear-log-btn").addEventListener("click", () => {
+        logDiv.innerHTML = "";
+      });
+    </script>
+  </body>
 </html>
